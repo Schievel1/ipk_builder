@@ -4,7 +4,7 @@ use eframe::{
     egui::{self, RichText},
     epaint::{Color32, Vec2},
 };
-use std::{path::PathBuf, io};
+use std::path::PathBuf;
 
 use crate::make_package;
 
@@ -39,7 +39,6 @@ pub enum ScriptSource {
     FromTextfield,
 }
 
-#[derive(Default)]
 pub struct IpkBuilder {
     pub control_file: FileOrPath,
     pub debian_binary: FileOrPath,
@@ -48,11 +47,13 @@ pub struct IpkBuilder {
     pub prerm: FileOrPath,
     pub data_path: Option<String>,
     pub output_path: Option<String>,
+    pub success_or_not: Result<String, Error>,
 }
 
-impl IpkBuilder {
-    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+impl Default for IpkBuilder {
+    fn default() -> Self {
         Self {
+            control_file: Default::default(),
             debian_binary: FileOrPath {
                 enabled: true,
                 from_textbox: "2.0".to_owned(),
@@ -71,6 +72,16 @@ impl IpkBuilder {
                 from_textbox: "#!/bin/bash\n".to_owned(),
                 ..Default::default()
             },
+            data_path: Default::default(),
+            output_path: Default::default(),
+            success_or_not: Err(anyhow!(" ")),
+        }
+    }
+}
+
+impl IpkBuilder {
+    pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
+        Self {
             ..Default::default()
         }
     }
@@ -131,7 +142,7 @@ impl eframe::App for IpkBuilder {
                         });
                     }
                     if self.control_file.file_or_text == ScriptSource::FromTextfield {
-                        let response = ui.add(
+                        let _ = ui.add(
                             egui::TextEdit::multiline(&mut self.control_file.from_textbox)
                                 .code_editor(),
                         );
@@ -188,7 +199,7 @@ impl eframe::App for IpkBuilder {
                             });
                         }
                         if self.debian_binary.file_or_text == ScriptSource::FromTextfield {
-                            let response = ui.add(
+                            let _ = ui.add(
                                 egui::TextEdit::multiline(&mut self.debian_binary.from_textbox)
                                     .code_editor(),
                             );
@@ -246,7 +257,7 @@ impl eframe::App for IpkBuilder {
                             });
                         }
                         if self.postinst.file_or_text == ScriptSource::FromTextfield {
-                            let response = ui.add(
+                            let _ = ui.add(
                                 egui::TextEdit::multiline(&mut self.postinst.from_textbox)
                                     .code_editor(),
                             );
@@ -305,7 +316,7 @@ impl eframe::App for IpkBuilder {
                             });
                         }
                         if self.preinst.file_or_text == ScriptSource::FromTextfield {
-                            let response = ui.add(
+                            let _ = ui.add(
                                 egui::TextEdit::multiline(&mut self.preinst.from_textbox)
                                     .code_editor(),
                             );
@@ -364,7 +375,7 @@ impl eframe::App for IpkBuilder {
                             });
                         }
                         if self.prerm.file_or_text == ScriptSource::FromTextfield {
-                            let response = ui.add(
+                            let _ = ui.add(
                                 egui::TextEdit::multiline(&mut self.prerm.from_textbox)
                                     .code_editor(),
                             );
@@ -415,20 +426,29 @@ impl eframe::App for IpkBuilder {
                 }
             });
 
-            let mut success_or_not: Result<String, Error> = Err(anyhow!("empty"));
             ui.vertical_centered(|ui| {
                 if (self.control_file.picked_path.is_some()
-                    || self.control_file.file_or_text == ScriptSource::FromTextfield)
-                    && (self.debian_binary.picked_path.is_some()
+                        || self.control_file.file_or_text == ScriptSource::FromTextfield)
+                    && (self.debian_binary.enabled
+                        || self.debian_binary.picked_path.is_some()
                         || self.debian_binary.file_or_text == ScriptSource::FromTextfield)
-                    || self.debian_binary.enabled && self.output_path.is_some()
-                    && self.data_path.is_some() && self.output_path.is_some()
+                    && (!self.postinst.enabled
+                        || self.postinst.picked_path.is_some()
+                        || self.postinst.file_or_text == ScriptSource::FromTextfield)
+                    && (!self.preinst.enabled
+                        || self.preinst.picked_path.is_some()
+                        || self.preinst.file_or_text == ScriptSource::FromTextfield)
+                    && (!self.prerm.enabled
+                        || self.prerm.picked_path.is_some()
+                        || self.prerm.file_or_text == ScriptSource::FromTextfield)
+                    && self.data_path.is_some() 
+                    && self.output_path.is_some()
                 {
                     if ui
                         .add_sized([120., 40.], egui::Button::new("Build!").fill(Color32::BLUE))
                         .clicked()
                     {
-                        success_or_not = make_package(self);
+                        self.success_or_not = make_package(self);
                     }
                 } else {
                     ui.add_enabled(
@@ -438,12 +458,11 @@ impl eframe::App for IpkBuilder {
                             .min_size(Vec2 { x: 120., y: 40. }),
                     );
                 };
+                match &self.success_or_not {
+                    Ok(_) => ui.label("Success!"),
+                    Err(e) => ui.label(e.to_string())
+                }
             });
-            if success_or_not.is_ok() {
-                ui.label("Success!")
-            } else {
-                ui.label("Failure!")
-            }
         });
     }
 }

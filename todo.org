@@ -1,0 +1,4 @@
+#+title: Todo
+
+- [ ] option to choose between tar and ar as the final package archive format
+- [ ] file name of output package must be configurable

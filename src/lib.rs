@@ -2,7 +2,7 @@ pub mod ui;
 
 use anyhow::{Context, bail, Result};
 use flate2::{write::GzEncoder, Compression};
-use log::trace;
+use log::info;
 use std::{
     fs::{File, self},
     io::Read,
@@ -34,16 +34,15 @@ pub fn append_file<P: AsRef<Path>>(
     tar_path: Option<&PathBuf>,
 ) -> Result<()> {
     match tar_path {
-        Some(s) => trace!(
-            "Packaging {:-<width$} into {}",
+        Some(s) => info!(
+            "Packaging {} into {}",
             src_path.as_ref().display(),
             s.file_name()
                 .unwrap_or_default()
                 .to_str()
                 .unwrap_or_default(),
-            width = 120
         ),
-        None => trace!("Packaging {}...", src_path.as_ref().display()),
+        None => info!("Packaging {}...", src_path.as_ref().display()),
     }
 
     let mut file = File::open(&src_path).context(format!(
@@ -68,7 +67,7 @@ pub fn make_package(
         let enc = GzEncoder::new(&control_archive, Compression::default());
         let mut tar = tar::Builder::new(enc);
 
-        trace!(
+        info!(
             "Packaging control file into {}",
             control_tar
                 .file_name()
@@ -88,7 +87,7 @@ pub fn make_package(
         }
 
         if data.postinst.enabled {
-        trace!(
+        info!(
             "Packaging postinst script into {}",
             control_tar
                 .file_name()
@@ -111,7 +110,7 @@ pub fn make_package(
         }
 
         if data.preinst.enabled {
-        trace!(
+        info!(
             "Packaging preinst script into {}",
             control_tar
                 .file_name()
@@ -134,7 +133,7 @@ pub fn make_package(
         }
 
         if data.prerm.enabled {
-        trace!(
+        info!(
             "Packaging prerm script into {}",
             control_tar
                 .file_name()
@@ -157,15 +156,17 @@ pub fn make_package(
         }
         tar.finish()?;
     }
-        trace!("Created control tar archive {}", control_tar.display());
+        info!("Created control tar archive {}", control_tar.display());
 
         data_tar.push("data.tar.gz");
         let data_archive = File::create(&data_tar).context("Could not create data.tar.gz")?;
         let enc = GzEncoder::new(&data_archive, Compression::default());
         let mut tar = tar::Builder::new(enc);
         tar.append_dir_all(
-            &data.data_path.clone().unwrap(), "/"
-        )?;
+            "", data.data_path.clone().unwrap(),
+        ).unwrap();
+
+        info!("Created data tar archive {}", data_tar.display());
 
     let package_name = "outpackage.ipk".to_owned();
     let mut package_tar: PathBuf = data.output_path.clone().unwrap().into();
@@ -186,7 +187,7 @@ pub fn make_package(
         .context("Error appending control.tar.gz to package archive")?;
     append_file(&data_tar, &mut tar, "data.tar.gz", Some(&package_tar))
         .context("Error appending data.tar.gz to package archive")?;
-        trace!(
+        info!(
             "Packaging debian_binary script into {}",
             package_tar
                 .file_name()
@@ -207,6 +208,7 @@ pub fn make_package(
         )?;
         }
 
+        info!("Created package {}", package_tar.display());
     // cleanup
     fs::remove_file(control_tar).context("Error removing contor.tar.gz")?;
     fs::remove_file(data_tar).context("Error removing data.tar.gz")?;
